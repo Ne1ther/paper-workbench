@@ -1,0 +1,24 @@
+{
+  "name": "read-pdf-skill",
+  "version": "0.1.0",
+  "description": "Interactive installer for the read-pdf skill (Codex / Claude Code)",
+  "type": "module",
+  "bin": {
+    "read-pdf-skill": "bin/install-read-pdf-skill.js"
+  },
+  "files": [
+    "bin",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "codex",
+    "claude-code",
+    "pdf",
+    "skill",
+    "installer"
+  ],
+  "author": "",
+  "license": "MIT"
+}
