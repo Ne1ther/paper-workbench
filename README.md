@@ -1,47 +1,88 @@
 # read-pdf-skill
 
-Interactive CLI installer for the `read-pdf` skill. It supports:
+Interactive installer for the `read-pdf` skill (Codex / Claude Code).
 
-1. Choosing Python runtime style: native / conda / uv
-2. Checking whether `PyMuPDF` (`fitz`) exists in that runtime
-3. Installing the skill into Codex or Claude Code skill directories
+This CLI guides users through:
 
-## Run with npx
+1. Selecting Python runtime type (`native`, `conda`, or `uv`)
+2. Checking `PyMuPDF` (`fitz`) availability
+3. Installing the skill into Codex or Claude Code
 
-After publishing to npm:
+## Quick Start
+
+Run directly from GitHub:
+
+```bash
+npx github:Ne1ther/read-pdf-skill
+```
+
+After publishing to npm, users can run:
 
 ```bash
 npx read-pdf-skill
 ```
 
-Before npm publish, run directly from a GitHub repo:
+## What Is Better Now
 
-```bash
-npx github:<your-github-user>/<your-repo-name>
-```
+- English-only installer prompts and docs
+- Auto-detects `conda` command (no path typing)
+- Auto-lists conda environments for selection
+- Better `uv` UX with managed mode:
+  - `uv run --with PyMuPDF ...` (recommended)
+  - No manual `PyMuPDF` setup required in managed mode
+- Cleaner CLI output with clear step headers and status labels
 
-## What it installs
+## Installation Flow
 
-- `read-pdf/SKILL.md` (generated from template with your selected run command)
+### Step 1: Runtime selection
+
+- `Native Python`: detects `python3/python` from `PATH`
+- `Conda`: detects conda executable and lets user pick from discovered envs
+- `uv`: detects `uv` executable and recommends managed mode
+
+### Step 2: PyMuPDF check
+
+- Verifies if `fitz` can be imported in the selected runtime
+- If missing (native/conda/current uv env), offers auto-install
+
+### Step 3: Target selection
+
+- `Codex`: installs to `~/.codex/skills/read-pdf`
+- `Claude Code`: installs to `~/.claude/skills/read-pdf`
+
+## Installed Files
+
+- `read-pdf/SKILL.md` (generated from template with runtime command)
 - `read-pdf/scripts/read_pdf.py`
 - `read-pdf/agents/openai.yaml`
 - `read-pdf/.installer-meta.json`
 
-Default target paths:
+## Requirements
 
-- Codex: `~/.codex/skills/read-pdf`
-- Claude Code: `~/.claude/skills/read-pdf` (falls back to existing Claude paths if detected)
+- Node.js 18+
+- One Python runtime option:
+  - Native Python
+  - Conda
+  - uv
 
-## Local test
+## Remove / Uninstall
+
+Delete the installed skill folder:
+
+- Codex: `rm -rf ~/.codex/skills/read-pdf`
+- Claude Code: `rm -rf ~/.claude/skills/read-pdf`
+
+## Developer Notes
+
+Local test:
 
 ```bash
 npm link
 read-pdf-skill
 ```
 
-## Release checklist
+Package build:
 
-1. Update `version` in `package.json`
-2. Test installer locally
-3. Publish source to GitHub
-4. Publish npm package (optional but recommended for simple `npx read-pdf-skill`)
+```bash
+npm pack
+```
