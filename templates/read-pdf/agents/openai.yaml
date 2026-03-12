@@ -1,3 +1,3 @@
 interface:
   display_name: "Read PDF"
-  short_description: "Help with Read PDF tasks and workflows"
+  short_description: "Read PDFs with text extraction, OCR fallback, and rendered-page inspection"

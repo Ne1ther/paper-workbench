@@ -22,6 +22,17 @@ After publishing to npm, users can run:
 npx read-pdf-skill
 ```
 
+## Skill Capabilities
+
+The installed `read-pdf` skill now supports:
+
+- Native-text PDF extraction for targeted reading, search, TOC inspection, and full-text export
+- OCR-aware workflows with `--ocr off|auto|force`
+- Render-to-PNG workflows for figure-, chart-, table-, and layout-heavy pages
+- Search / extraction that can reuse OCR output when text extraction is weak
+- Tesseract language selection such as `eng` or `chi_sim+eng`
+- Figure/table caption extraction across native-text and OCR-assisted pages
+
 ## What Is Better Now
 
 - English-only installer prompts and docs
@@ -31,6 +42,7 @@ npx read-pdf-skill
   - `uv run --with PyMuPDF ...` (recommended)
   - No manual `PyMuPDF` setup required in managed mode
 - Cleaner CLI output with clear step headers and status labels
+- New installed skill workflow for OCR fallback and rendered-page inspection
 
 ## Installation Flow
 
@@ -56,6 +68,27 @@ npx read-pdf-skill
 - `read-pdf/scripts/read_pdf.py`
 - `read-pdf/agents/openai.yaml`
 - `read-pdf/.installer-meta.json`
+
+## Example Installed Commands
+
+Depending on the selected runtime, the generated skill will embed a command like:
+
+```bash
+~/miniforge3/bin/conda run -n torch_t python scripts/read_pdf.py <pdf_path> [options]
+```
+
+Useful options in the installed skill include:
+
+- `--page 3`
+- `--pages 1-5`
+- `--search "keyword" --ignore-case`
+- `--figures`
+- `--toc`
+- `--all --output ./full_text.txt`
+- `--render-page 3 --output ./page-3.png`
+- `--render-pages 10-12 --output ./renders/`
+- `--ocr auto`
+- `--ocr force --ocr-lang chi_sim+eng`
 
 ## Requirements
 
