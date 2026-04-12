@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper Review"
+  short_description: "Opt-in reviewer-panel, meta-review, rebuttal, and AC-style paper review"
+  default_prompt: "Use this only when the user explicitly asks for reviewer-style assessment, multi-agent review, meta-review, rebuttal help, or review-quality feedback. Build a reviewer panel with separate roles, keep the reviewers independent before aggregation, require page-cited evidence or explicit inference labels for major claims, then produce an anonymous meta-review, concerns matrix, and final recommendation."

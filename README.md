@@ -1,94 +1,117 @@
-# read-pdf-skill
+# paper-workbench
 
-Interactive installer for the `read-pdf` skill (Codex / Claude Code).
+Interactive installer for a paper workflow skill pack for Codex and Claude Code.
 
-This CLI guides users through:
+This repo used to be `read-pdf-skill`. It now installs a broader stack:
 
-1. Selecting Python runtime type (`native`, `conda`, or `uv`)
-2. Checking `PyMuPDF` (`fitz`) availability
-3. Installing the skill into Codex or Claude Code
+- `read-pdf`: deterministic PDF reading, OCR fallback, render-to-image, temp caching
+- `paper-analyst`: page-cited paper analysis, critique, comparison, go/no-go follow-up decisions
+- `paper-review`: reviewer-panel, meta-review, rebuttal, and AC-style review workflows
+- `paper-analyst-agent` and `paper-review-agent`: Codex agent profiles that orchestrate the skills above
 
 ## Quick Start
 
-Run directly from GitHub:
+Current GitHub repo slug is still the old one, so GitHub install remains:
 
 ```bash
 npx github:Ne1ther/read-pdf-skill
 ```
 
-After publishing to npm, users can run:
+After publishing the renamed package to npm:
+
+```bash
+npx paper-workbench
+```
+
+Backward-compatible CLI alias to ease migration:
 
 ```bash
 npx read-pdf-skill
 ```
 
-## Skill Capabilities
-
-The installed `read-pdf` skill now supports:
-
-- Native-text PDF extraction for targeted reading, search, TOC inspection, and full-text export
-- OCR-aware workflows with `--ocr off|auto|force`
-- Render-to-PNG workflows for figure-, chart-, table-, and layout-heavy pages
-- Search / extraction that can reuse OCR output when text extraction is weak
-- Tesseract language selection such as `eng` or `chi_sim+eng`
-- Figure/table caption extraction across native-text and OCR-assisted pages
-
-## What Is Better Now
-
-- English-only installer prompts and docs
-- Auto-detects `conda` command (no path typing)
-- Auto-lists conda environments for selection
-- Better `uv` UX with managed mode:
-  - `uv run --with PyMuPDF ...` (recommended)
-  - No manual `PyMuPDF` setup required in managed mode
-- Cleaner CLI output with clear step headers and status labels
-- New installed skill workflow for OCR fallback and rendered-page inspection
-
-## Installation Flow
-
-### Step 1: Runtime selection
-
-- `Native Python`: detects `python3/python` from `PATH`
-- `Conda`: detects conda executable and lets user pick from discovered envs
-- `uv`: detects `uv` executable and recommends managed mode
-
-### Step 2: PyMuPDF check
-
-- Verifies if `fitz` can be imported in the selected runtime
-- If missing (native/conda/current uv env), offers auto-install
-
-### Step 3: Target selection
-
-- `Codex`: installs to `~/.codex/skills/read-pdf`
-- `Claude Code`: installs to `~/.claude/skills/read-pdf`
-
-## Installed Files
-
-- `read-pdf/SKILL.md` (generated from template with runtime command)
-- `read-pdf/scripts/read_pdf.py`
-- `read-pdf/agents/openai.yaml`
-- `read-pdf/.installer-meta.json`
-
-## Example Installed Commands
-
-Depending on the selected runtime, the generated skill will embed a command like:
+If you also rename the GitHub repo, the direct GitHub install can become:
 
 ```bash
-~/miniforge3/bin/conda run -n torch_t python scripts/read_pdf.py <pdf_path> [options]
+npx github:Ne1ther/paper-workbench
 ```
 
-Useful options in the installed skill include:
+## What Gets Installed
 
-- `--page 3`
-- `--pages 1-5`
-- `--search "keyword" --ignore-case`
-- `--figures`
-- `--toc`
-- `--all --output ./full_text.txt`
-- `--render-page 3 --output ./page-3.png`
-- `--render-pages 10-12 --output ./renders/`
-- `--ocr auto`
-- `--ocr force --ocr-lang chi_sim+eng`
+### Codex
+
+- `~/.codex/skills/read-pdf`
+- `~/.codex/skills/paper-analyst`
+- `~/.codex/skills/paper-review`
+- `~/.codex/agents/paper-analyst-agent`
+- `~/.codex/agents/paper-review-agent`
+
+### Claude Code
+
+- `~/.claude/skills/read-pdf`
+- `~/.claude/skills/paper-analyst`
+- `~/.claude/skills/paper-review`
+
+Claude Code installs the skill pack only. The reusable agent profiles are Codex-specific and are skipped there.
+
+## Why This Is Better
+
+- Better naming: the package now matches the real scope instead of only the bottom-layer PDF reader
+- `read-pdf` now behaves like an ingestion layer, not a catch-all paper workflow
+- Paper analysis and paper review are split into their own skills with explicit routing boundaries
+- Codex gets reusable agents for end-to-end orchestration on top of the skills
+- Conda installs use an activation wrapper instead of `conda run -n`
+- Default exports/renders land in system temp with cache reuse and cleanup guidance
+
+## Runtime Setup Flow
+
+### 1. Python runtime selection
+
+- `Native Python`: use `python3` or `python` from `PATH`
+- `Conda`: detect `conda`, choose an env, and generate an activation wrapper
+- `uv`: use managed mode (`uv run --with PyMuPDF ...`) or the current uv environment
+
+### 2. PyMuPDF check
+
+- Verifies whether `import fitz` works in the selected runtime
+- Offers to install `PyMuPDF` automatically when needed
+
+### 3. Target installation
+
+- Installs the skill pack into Codex or Claude Code
+- Installs the reusable agents only when the target is Codex
+
+## Included Read-PDF Capabilities
+
+- Native-text extraction for targeted reading and search
+- OCR modes: `off`, `auto`, `force`
+- Render-to-PNG for figures, tables, charts, and layout-sensitive pages
+- Cached full-text exports with `.pages.jsonl` and `.manifest.json` sidecars
+- Temp-output reuse, TTL pruning, and size-cap cleanup
+- Tesseract language selection such as `eng` or `chi_sim+eng`
+
+## Included Paper Analysis Capabilities
+
+- Deep summary with page evidence
+- Critical experiment audit
+- Reproduction or follow-up decision (`go` / `no-go`)
+- Comparison mode across multiple papers
+- Optional routing to `paper-search` when the user explicitly asks for related work or novelty checks
+
+## Included Paper Review Capabilities
+
+- Reviewer-style single review
+- Reviewer panel with role separation
+- Meta-review / AC-style recommendation
+- Rebuttal planning
+- Review-quality feedback for existing reviews
+
+## Project Layout
+
+- `bin/install-paper-workbench.js`: interactive installer
+- `templates/read-pdf`: the PDF ingestion skill
+- `templates/paper-analyst`: the evidence-backed analysis skill
+- `templates/paper-review`: the reviewer-style skill
+- `templates/agents`: reusable Codex agents
 
 ## Requirements
 
@@ -98,23 +121,16 @@ Useful options in the installed skill include:
   - Conda
   - uv
 
-## Remove / Uninstall
+## Local Development
 
-Delete the installed skill folder:
-
-- Codex: `rm -rf ~/.codex/skills/read-pdf`
-- Claude Code: `rm -rf ~/.claude/skills/read-pdf`
-
-## Developer Notes
-
-Local test:
+Link the CLI locally:
 
 ```bash
 npm link
-read-pdf-skill
+paper-workbench
 ```
 
-Package build:
+Build a tarball:
 
 ```bash
 npm pack

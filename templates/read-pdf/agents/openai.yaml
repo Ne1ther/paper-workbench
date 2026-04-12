@@ -1,3 +1,4 @@
 interface:
   display_name: "Read PDF"
   short_description: "Read PDFs with text extraction, OCR fallback, and rendered-page inspection"
+  default_prompt: "Use native PDF/context reading first when the already-visible content is enough for a quick answer. Escalate to the bundled wrapper when you need deterministic page control, search, OCR, rendering, or export. Start with native text extraction, use OCR only when extraction is weak or the PDF is scanned, render pages for figures, tables, and layout-sensitive questions, treat --figures as caption heuristics rather than figure cropping, report the pages and read mode used, reuse cached temp outputs when available, and keep artifacts in system temp unless explicitly asked to preserve them."
