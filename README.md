@@ -2,7 +2,7 @@
 
 Interactive installer for a paper workflow skill pack for Codex and Claude Code.
 
-This repo used to be `read-pdf-skill`. It now installs a broader stack:
+This repo installs a broader paper workflow stack:
 
 - `read-pdf`: deterministic PDF reading, OCR fallback, render-to-image, temp caching
 - `paper-analyst`: page-cited paper analysis, critique, comparison, go/no-go follow-up decisions
@@ -11,25 +11,7 @@ This repo used to be `read-pdf-skill`. It now installs a broader stack:
 
 ## Quick Start
 
-Current GitHub repo slug is still the old one, so GitHub install remains:
-
-```bash
-npx github:Ne1ther/read-pdf-skill
-```
-
-After publishing the renamed package to npm:
-
-```bash
-npx paper-workbench
-```
-
-Backward-compatible CLI alias to ease migration:
-
-```bash
-npx read-pdf-skill
-```
-
-If you also rename the GitHub repo, the direct GitHub install can become:
+Install directly from GitHub:
 
 ```bash
 npx github:Ne1ther/paper-workbench
@@ -128,10 +110,4 @@ Link the CLI locally:
 ```bash
 npm link
 paper-workbench
-```
-
-Build a tarball:
-
-```bash
-npm pack
 ```

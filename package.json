@@ -4,8 +4,7 @@
   "description": "Interactive installer for the paper-workbench skill pack (Codex / Claude Code)",
   "type": "module",
   "bin": {
-    "paper-workbench": "bin/install-paper-workbench.js",
-    "read-pdf-skill": "bin/install-paper-workbench.js"
+    "paper-workbench": "bin/install-paper-workbench.js"
   },
   "files": [
     "bin",
@@ -25,11 +24,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ne1ther/read-pdf-skill.git"
+    "url": "git+https://github.com/Ne1ther/paper-workbench.git"
   },
-  "homepage": "https://github.com/Ne1ther/read-pdf-skill",
+  "homepage": "https://github.com/Ne1ther/paper-workbench",
   "bugs": {
-    "url": "https://github.com/Ne1ther/read-pdf-skill/issues"
+    "url": "https://github.com/Ne1ther/paper-workbench/issues"
   },
   "author": "",
   "license": "MIT"
