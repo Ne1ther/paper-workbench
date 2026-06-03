@@ -7,6 +7,7 @@ description: Multi-agent conference-style review for a specific paper or PDF, in
 
 Use this skill for **conference-style peer review** of a specific paper.
 This is a separate opt-in layer on top of `read-pdf` and `paper-analyst`.
+When the task touches Zotero citations, BibTeX, or TeX compilation, hand those parts to the official Zotero and LaTeX plugins. Keep this skill focused on reviewer reasoning, rebuttal strategy, and decision quality.
 
 ## Trigger Boundary
 
@@ -32,6 +33,8 @@ Those belong to `read-pdf`, `paper-analyst`, or `paper-search` unless the user e
 - `read-pdf`: ingest the paper and inspect figures/tables when needed
 - `paper-analyst`: build evidence-backed understanding of the paper
 - `paper-review`: convert that understanding into reviewer-style judgments
+- official Zotero plugin: optional citation/BibTeX handoff for rebuttal drafts or manuscript edits
+- official LaTeX plugin: optional compile/diagnostic handoff for TeX manuscripts
 
 Use `paper-search` only when the user explicitly asks for novelty checks, missing related work, or baseline scouting.
 
@@ -108,6 +111,14 @@ Also produce a compact **concerns matrix** showing which reviewer raised which i
 
 When the input is an existing review, critique the **review quality itself**.
 The goal is to help the reviewer improve the review, not to address the authors directly.
+
+### 7. Optional manuscript handoff
+
+Run only when the user asks to edit a manuscript, rebuttal, or response letter with citations or TeX output.
+
+- Use the official Zotero plugin for citation lookup, BibTeX export/sync, and citation insertion.
+- Use the official LaTeX plugin for compiling the TeX project and diagnosing build errors.
+- Keep review judgments page-cited and separate from compiler or bibliography issues.
 
 ## Review Modes
 

@@ -1,6 +1,6 @@
 {
   "name": "paper-workbench",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Interactive installer for the paper-workbench skill pack (Codex / Claude Code)",
   "type": "module",
   "bin": {
@@ -9,6 +9,8 @@
   "files": [
     "bin",
     "templates",
+    "!templates/**/__pycache__/**",
+    "!templates/**/*.pyc",
     "README.md",
     "LICENSE"
   ],
@@ -18,6 +20,8 @@
     "pdf",
     "paper-analysis",
     "paper-review",
+    "zotero",
+    "latex",
     "skill",
     "installer",
     "agent"

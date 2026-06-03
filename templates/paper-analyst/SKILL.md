@@ -8,6 +8,7 @@ description: Rigorous research-paper analysis from PDFs or paper manuscripts onc
 Use this skill after loading the source document. For PDFs, pair it with `read-pdf` and deliberately choose between plain extraction, OCR, rendered-page inspection, or a hybrid of these modes.
 For full paper-analysis tasks from a PDF, prefer letting `paper-analyst-agent` orchestrate this skill together with `read-pdf` when that reusable agent profile is available.
 Only pair this skill with `paper-search` when the user explicitly asks for related work, novelty, field positioning, baselines, or recent-paper scouting.
+When official Zotero and LaTeX plugins are installed, treat them as neighboring workflow tools: Zotero handles library search, citation keys, BibTeX export/sync, and explicit imports; LaTeX handles TeX compilation and diagnostics. This skill handles evidence-backed interpretation.
 
 ## Routing Snapshot
 
@@ -16,6 +17,8 @@ Only pair this skill with `paper-search` when the user explicitly asks for relat
 - **Deep understanding, critique, reproduction decision, or comparison** -> use `paper-analyst`.
 - **Reviewer-style judgment, meta-review, rebuttal, or AC decision** -> switch to `paper-review`.
 - **Related work, novelty boundary, baseline hunting, or recent-paper scan** -> add `paper-search`, but only when the user explicitly asks.
+- **Existing Zotero item or durable citation work** -> use the official Zotero plugin before or after analysis as needed.
+- **Editing or compiling a TeX manuscript** -> use the official LaTeX plugin for compilation and diagnostics.
 
 ## Trigger Boundary
 
@@ -57,8 +60,22 @@ Default to `critique` when the user says "analyze this paper" without more guida
 Do not start deep analysis from a vague citation alone.
 
 - If the user provided a local PDF, use that artifact directly.
+- If the user provided a Zotero item key, BibTeX key, DOI, or title that may already be in Zotero, use the official Zotero plugin first to search the local library. If a local PDF attachment exists, read it through `read-pdf`.
 - If the user provided an arXiv link and analysis depends on implementation detail, method reconstruction, or appendix-heavy evidence, read `references/arxiv-source-first.md` and consider source-first inspection after the PDF pass.
+- If the paper has legal OA or arXiv full text, read it as a temporary artifact unless the user asks to save it.
+- If publisher HTML contains the full text, read the HTML directly when possible and use the PDF only for page-specific evidence, figures, or tables.
+- If full text requires login or manual download, label the source as `needs_user_pdf` and ask the user to provide the PDF or save it through Zotero Connector.
 - If the user provided only a title, abstract snippet, or screenshot, first obtain the real paper artifact before giving high-confidence judgments.
+
+Access labels:
+
+- `zotero_pdf`: local Zotero attachment available
+- `oa_pdf`: legal open-access PDF available
+- `html_fulltext`: enough full text is readable as HTML
+- `abstract_only`: metadata or abstract only
+- `needs_user_pdf`: user-side PDF acquisition is required
+
+Do not import every process-stage paper into Zotero. Keep temporary reads in system temp/cache, and promote only durable references that the user needs for precise citation, later reuse, or manuscript bibliography.
 
 ### 3. Choose the PDF ingestion mode via `read-pdf`
 
@@ -153,6 +170,16 @@ Workflow:
 - compare the target paper's real differentiators against those neighbors
 - call out overlaps, likely novelty boundaries, and missing citations
 
+### 9. Optional Zotero and LaTeX handoff
+
+Use these only when the user's task touches citation management or manuscript production:
+
+- Search Zotero before adding a new reference, so duplicates are not created.
+- Export or sync `references.bib` through the official Zotero plugin.
+- Insert citation keys through the official Zotero plugin when editing `.tex` or Markdown drafts.
+- Compile `.tex` projects through the official LaTeX plugin, not through paper-workbench.
+- If LaTeX compilation fails, keep the failure separate from paper analysis: cite the exact compiler/log issue and route to `latex-doctor` when needed.
+
 ## Output Contract
 
 Always output two layers unless the user explicitly requests otherwise.
@@ -207,6 +234,8 @@ Recommended comparison axes:
 - Use rendered-page inspection whenever a key conclusion depends on a figure, table, chart, or layout.
 - Prefer OCR only when it adds evidence; do not slow every workflow down by default.
 - When invoking `read-pdf`, use its wrapper or an activated in-shell runtime instead of `conda run -n`.
+- When a local Zotero PDF is available, read the resolved PDF path with `read-pdf`; do not duplicate that PDF into another cache unless a temp export/render is needed.
+- When a publisher PDF cannot be fetched because of permissions, do not try to bypass access controls. Try legal OA, arXiv, author manuscripts, or existing Zotero attachments, then ask for user-provided PDF if needed.
 - When the user explicitly asks for field positioning or novelty checks, use `paper-search` first rather than inferring the literature from one paper alone.
 
 ## Optional Reference
