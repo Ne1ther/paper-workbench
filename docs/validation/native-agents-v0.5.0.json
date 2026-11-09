@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "release": "0.5.0",
+  "recorded_at_utc": "2026-11-09T09:35:08.394471+00:00",
+  "status": "passed",
+  "host": {
+    "product": "Codex CLI/app-server",
+    "version": "0.167.0",
+    "platform": "macOS"
+  },
+  "parent_settings": {
+    "model": "gpt-6.1-sol",
+    "modelProvider": "openai",
+    "reasoningEffort": "xhigh",
+    "serviceTier": "priority"
+  },
+  "configuration": {
+    "installed_standalone_profiles": true,
+    "role_aliases_registered": false,
+    "global_configuration_changed": false,
+    "external_apps_plugins_memories_chronicle_disabled_for_qa": true,
+    "sandbox": "workspace-write in temporary workspace"
+  },
+  "fixture": {
+    "path": "tests/fixtures/native-acceptance-paper.pdf",
+    "sha256": "41d167412dd696391d49995fe9009b51e5ea00f2c930d896dc14849aff79b31e",
+    "page_count": 2,
+    "kind": "synthetic non-research acceptance material",
+    "page_text": [
+      "CopperPlate Cooling Study\nSynthetic acceptance fixture. This is not a real research paper.\nAbstract\nWe compare a smoothing reconstruction method M with baseline B for copper plate\ntemperature recovery. The pilot uses four development cases under one fixed random\nseed. The reported mean absolute error decreases by 12.5%. The experiment does\nnot include an independent held-out evaluation.\nMethod\nMethod M adds a fixed smoothing step after baseline reconstruction. Both methods\nuse the same four observations and objective. Settings were chosen using the\ndevelopment cases.\nEvaluation\nTable 1 on PDF page 2 reports average error and inference time on the same\nmachine. The paper does not report per-case errors or repeated-seed variability.\nScope\nThese are preliminary development results. Code, data, and the smoothing coefficient\nare not provided in this fixture.",
+      "Results and limitations\nTable 1. Four development cases; lower MAE is better.\nMethod\nMAE (K)\nTime (s)\nBaseline B\n8.0\n2.0\nMethod M\n7.0\n6.0\nAll numbers are means over the same four development cases. No uncertainty\ninterval is shown. Method M improves the reported MAE but increases inference time.\nLimitations\nThe held-out accuracy and generalization to other plates remain unknown. The\nsmoothing parameter was chosen using the same four cases. Reproduction requires\nthe missing coefficient, code, and observations.\nConclusion\nThe pilot motivates further controlled evaluation; it does not establish generalization."
+    ]
+  },
+  "input_sha256": {
+    "templates/agents/paper-analyst-agent.toml": "e495934827657d58f2a77725060f266aed7a1742927b0694a1166d7620558115",
+    "templates/agents/paper-review-agent.toml": "0421d5a7ee94dd0809e08676f6c893c6fa87bcae2b4061c68b09fa2ad016a744",
+    "templates/paper-analyst/SKILL.md": "903a7703cfeda68fb1dde1271423651f61f9d8e8279b9af3713dd057a9a35ed4",
+    "templates/paper-review/SKILL.md": "99abc374687ebe79822c968a20fee88226475e7a163aba32cdf37e39eec9ac05",
+    "templates/read-pdf/scripts/read_pdf.py": "0622bb744aef2db668e03e659a04148b5e877f8e3e212730a99e2ff0c309a494",
+    "templates/read-pdf/SKILL.template.md": "8a7a20f55363d400c120ec894d186abfe82804326889655650149b90b77c384b"
+  },
+  "native_spawns": [
+    {
+      "tool": "spawn_agent",
+      "agent_type": "paper-analyst-agent",
+      "task_name": "native_paper_analysis",
+      "history": "default",
+      "model_override": null,
+      "reasoning_override": null
+    },
+    {
+      "tool": "spawn_agent",
+      "agent_type": "paper-review-agent",
+      "task_name": "native_paper_review",
+      "history": "default",
+      "model_override": null,
+      "reasoning_override": null
+    }
+  ],
+  "roles": [
+    {
+      "requested_role": "paper-analyst-agent",
+      "host_agentRole": "paper-analyst-agent",
+      "host_source_agent_role": "paper-analyst-agent",
+      "host_depth": 1,
+      "runtime_contexts": [
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        },
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      ],
+      "commands": [
+        {
+          "command": "/bin/zsh -lc 'cat $SKILLS/read-pdf/SKILL.md'",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc 'cat $SKILLS/paper-analyst/SKILL.md'",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --pages 1-3 --max-chars 0 --no-prune\"",
+          "exit_code": 2
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --pages 1-2 --max-chars 0 --no-prune\"",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --render-page 2 --output '$QA/analyst-page-2.png' --no-prune\"",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"rm '$QA/analyst-page-2.png'\"",
+          "exit_code": 0
+        }
+      ],
+      "image_views": [
+        "$QA/analyst-page-2.png"
+      ],
+      "completed": true,
+      "final_answer": "依据本地两页合成夹具《CopperPlate Cooling Study》（非真实研究；以下均为 PDF 页码，表 1 已核对渲染页面）：\n\n- **研究问题**：在铜板温度重建中，增加平滑处理能否降低基线方法的重建误差？（第 1 页，摘要与方法）\n- **方法**：方法 M 在基线 B 的重建结果后增加固定平滑步骤；两者使用相同的四个观测和目标函数，参数在开发案例上选择。（第 1 页，方法）\n- **关键结果**：四个开发案例的平均绝对误差由 8.0 K 降至 7.0 K，即降低 12.5%；推理时间由 2.0 秒增至 6.0 秒，为原来的 3 倍。（第 2 页，表 1）\n- **适用边界**：实验仅有四个开发案例、一个固定随机种子，调参与评估使用同一批案例，没有独立留出测试；未报告逐案例误差或变异性。结果只支持该开发设置下的初步改善，其他铜板上的泛化仍未知；代码、观测数据和平滑系数缺失，也限制复现。（第 1 页，摘要、评估与范围；第 2 页，局限与结论）",
+      "rollout_archived": true
+    },
+    {
+      "requested_role": "paper-review-agent",
+      "host_agentRole": "paper-review-agent",
+      "host_source_agent_role": "paper-review-agent",
+      "host_depth": 1,
+      "runtime_contexts": [
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        },
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh"
+        }
+      ],
+      "commands": [
+        {
+          "command": "/bin/zsh -lc 'cat $SKILLS/paper-review/SKILL.md $SKILLS/paper-analyst/SKILL.md $SKILLS/read-pdf/SKILL.md'",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --toc --no-prune\"",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --pages 1-3 --max-chars 0 --no-prune\"",
+          "exit_code": 2
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --pages 1-2 --max-chars 0 --no-prune\"",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"bash '$SKILLS/read-pdf/scripts/run_read_pdf.sh' '$QA/synthetic-paper.pdf' --render-page 2 --output '$QA/review-page-2.png' --no-prune\"",
+          "exit_code": 0
+        },
+        {
+          "command": "/bin/zsh -lc \"rm '$QA/review-page-2.png'\"",
+          "exit_code": 0
+        }
+      ],
+      "image_views": [
+        "$QA/review-page-2.png"
+      ],
+      "completed": true,
+      "final_answer": "《CopperPlate Cooling Study》单人审稿意见。本文为合成测试夹具；以下页码均为 PDF 页码（从 1 开始）。已读取全文两页，并直接核对第 2 页表 1。\n\n**总体评价：**在基线重建后加入固定平滑步骤，初步结果显示误差下降，但证据仅支持开发集上的精度与耗时权衡，尚不能判断泛化能力。（第 1–2 页）\n\n**优点**\n\n- 对照条件较明确：两种方法使用相同观测和目标，耗时在同一机器上测量。（第 1 页）\n- 同时报告收益与代价：MAE 从 8.0 K 降至 7.0 K，下降 12.5%；耗时从 2.0 s 增至 6.0 s，即原来的 3 倍。（第 2 页，表 1）\n- 结论克制，明确承认尚未建立泛化能力。（第 2 页，Conclusion）\n\n**主要问题与可操作的问题**\n\n1. **缺少独立评估。**平滑参数的选择和结果报告均使用同四个开发案例，存在选择偏差风险，但不能据此断言已发生过拟合。能否固定参数后，在独立留出案例上比较两种方法？（第 1 页 Method；第 2 页 Limitations）\n2. **稳定性证据不足。**仅四个案例、一个固定随机种子，未报告逐案例误差、重复种子结果或不确定性区间，无法判断平均改善是否稳定。能否补充配对的逐案例结果及适当的重复评估？（第 1 页 Abstract、Evaluation；第 2 页表 1 及表后说明）\n3. **复现信息缺失。**代码、观测数据和平滑系数未提供。能否补充具体平滑公式、系数及选择流程，并公开运行材料？同时说明何种应用能接受以三倍耗时换取当前误差改善。（第 1 页 Method、Scope；第 2 页表 1、Limitations）\n\n**置信度：**对上述文内判断较高；未核查外部新颖性，也未进行实验复现。",
+      "rollout_archived": true
+    }
+  ],
+  "manual_semantic_checks": {
+    "analyst_summary_without_forced_scores_or_reproduction_verdict": "passed",
+    "reviewer_single_report_without_panel_or_acceptance_decision": "passed",
+    "major_judgments_have_real_page_locators": "passed",
+    "development_evidence_not_presented_as_independent_generalization": "passed"
+  },
+  "preliminary_run": {
+    "status": "not used for role-binding pass",
+    "reason": "Ephemeral-parent history forking failed; fresh-context children completed but child metadata was not retained in that collection.",
+    "local_trace_sha256": "47d4ae4955fc9e625e7d1307d716d52d9fcac2929e1636cf26604bf027427da9"
+  },
+  "observed_recoveries": [
+    "Both confirmation roles requested pages 1-3 from a two-page fixture, received exit code 2, corrected the range to pages 1-2, and completed reading."
+  ],
+  "session_cleanup": {
+    "confirmation_parent_and_children_archived": true,
+    "subsequent_child_archive_requests": "No rollout at old path after recursive parent archive; all three archived paths were verified.",
+    "temporary_workspace_cleanup": "after private receipt preservation"
+  },
+  "token_usage": {
+    "scope": "Per-thread counters from both runs, including preliminary parent and children; cached input is part of input, reasoning output is part of output.",
+    "reported_totals": {
+      "preliminary": {
+        "parent": {
+          "totalTokens": 176558,
+          "inputTokens": 173691,
+          "cachedInputTokens": 157312,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 2867,
+          "reasoningOutputTokens": 571
+        },
+        "child_1": {
+          "totalTokens": 151920,
+          "inputTokens": 150786,
+          "cachedInputTokens": 104576,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 1134,
+          "reasoningOutputTokens": 139
+        },
+        "child_2": {
+          "totalTokens": 185720,
+          "inputTokens": 183658,
+          "cachedInputTokens": 169216,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 2062,
+          "reasoningOutputTokens": 730
+        }
+      },
+      "confirmation": {
+        "parent": {
+          "totalTokens": 120301,
+          "inputTokens": 118160,
+          "cachedInputTokens": 92544,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 2141,
+          "reasoningOutputTokens": 486
+        },
+        "paper-analyst-agent": {
+          "totalTokens": 177124,
+          "inputTokens": 175950,
+          "cachedInputTokens": 158336,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 1174,
+          "reasoningOutputTokens": 203
+        },
+        "paper-review-agent": {
+          "totalTokens": 209064,
+          "inputTokens": 207620,
+          "cachedInputTokens": 178560,
+          "cacheWriteInputTokens": 0,
+          "outputTokens": 1444,
+          "reasoningOutputTokens": 170
+        }
+      }
+    },
+    "billing_cost": "not measured"
+  },
+  "local_confirmation_trace_sha256": "777f59abf7486ce60f2a224765895ef570b6fa727c70030784e553a8fa5c8b02",
+  "limits": [
+    "One synthetic two-page paper, one host/version.",
+    "Explicit native role invocation was tested; implicit natural-language role choice was not.",
+    "No desktop-host, Claude-agent, real-manuscript, scientific-validity, or independent-review-quality acceptance."
+  ]
+}

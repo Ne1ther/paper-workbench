@@ -1,13 +1,21 @@
 {
   "name": "paper-workbench",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Interactive installer for the paper-workbench skill pack (Codex / Claude Code)",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:pdf": "python -m unittest discover -s tests -p 'test_*.py'"
+  },
   "bin": {
     "paper-workbench": "bin/install-paper-workbench.js"
   },
   "files": [
     "bin",
+    "lib",
     "templates",
     "!templates/**/__pycache__/**",
     "!templates/**/*.pyc",

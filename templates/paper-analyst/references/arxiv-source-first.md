@@ -2,7 +2,7 @@
 
 Use this reference when the user provides an arXiv paper and wants more than a normal PDF summary.
 
-## When to Use It
+## When to use it
 
 - The user gives an arXiv URL instead of only a PDF
 - The paper is method-heavy and the PDF alone feels compressed
@@ -18,7 +18,7 @@ Prefer this order:
 3. Figure/table assets referenced by the source
 4. PDF fallback for layout and visual confirmation
 
-## What to Recover From Source
+## What to recover from source
 
 - title and paper structure
 - method path (`input -> modules -> output`)
@@ -26,7 +26,7 @@ Prefer this order:
 - experiment tables and ablations
 - pipeline / framework figure when clearly identifiable
 
-## Practical Guardrails
+## Practical guardrails
 
 - Treat source parsing as a supplement, not a replacement for PDF evidence.
 - If source and PDF disagree, surface the mismatch explicitly.

@@ -1,29 +1,23 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { buildInstallPlan, findLegacyEntries, inspectInstallPlan, installComponents } from '../lib/installer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const TEMPLATE_ROOT = path.resolve(__dirname, '..', 'templates');
-const SKILL_COMPONENTS = ['read-pdf', 'paper-analyst', 'paper-review'];
-const CODEX_AGENT_COMPONENTS = ['paper-analyst-agent', 'paper-review-agent'];
+const PACKAGE = JSON.parse(await fs.readFile(path.join(__dirname, '..', 'package.json'), 'utf8'));
 const TARGETS = {
   codex: {
-    label: 'Codex',
-    skillBases: ['~/.codex/skills'],
-    agentBase: '~/.codex/agents'
+    label: 'Codex'
   },
   claude: {
-    label: 'Claude Code',
-    skillBases: ['~/.claude/skills', '~/.config/claude-code/skills', '~/.claude-code/skills'],
-    agentBase: null
+    label: 'Claude Code'
   }
 };
 
@@ -164,27 +158,12 @@ function buildCondaWrapperBody(condaBase, envName) {
   ].join('\n');
 }
 
-function resolveSkillBase(targetKey) {
-  for (const candidate of TARGETS[targetKey].skillBases) {
-    const expanded = expandHome(candidate);
-    if (existsSync(expanded)) {
-      return expanded;
-    }
-  }
-  return expandHome(TARGETS[targetKey].skillBases[0]);
-}
-
-function resolveAgentBase(targetKey) {
-  const base = TARGETS[targetKey].agentBase;
-  return base ? expandHome(base) : null;
-}
-
 function printBanner() {
   const bar = '='.repeat(64);
   console.log(c(bar, ANSI.cyan));
-  console.log(c('paper-workbench installer', ANSI.bold, ANSI.cyan));
+  console.log(c(`paper-workbench ${PACKAGE.version} installer`, ANSI.bold, ANSI.cyan));
   console.log(c(bar, ANSI.cyan));
-  console.log(c('Install flow: Environment -> PyMuPDF check -> Target install\n', ANSI.dim));
+  console.log(c('Install flow: Target preview -> Environment -> PyMuPDF check -> Safe install\n', ANSI.dim));
 }
 
 function printStep(index, total, title) {
@@ -243,23 +222,23 @@ async function confirm(rl, question, defaultYes = true) {
   return defaultYes;
 }
 
-async function configureNative(rl) {
-  const detected = detectPythonCommand();
+async function configureNative(rl, suppliedPython) {
+  const detected = suppliedPython || detectPythonCommand();
   if (!detected) {
     throw new Error('Could not detect python3/python in PATH.');
   }
 
   info(`Detected Python command: ${detected}`);
-  const useDetected = await confirm(rl, `Use ${detected}?`, true);
+  const useDetected = suppliedPython || await confirm(rl, `Use ${detected}?`, true);
   const pythonCmd = useDetected ? detected : await askLine(rl, 'Python command', detected);
 
   return {
     type: 'native',
     name: `native (${pythonCmd})`,
     check: { cmd: pythonCmd, args: ['-V'] },
-    detect: { cmd: pythonCmd, args: ['-c', 'import fitz'] },
+    detect: { cmd: pythonCmd, args: ['-c', 'import pymupdf'] },
     install: { cmd: pythonCmd, args: ['-m', 'pip', 'install', '--upgrade', 'PyMuPDF'] },
-    manualCommandText: `${pythonCmd} scripts/read_pdf.py <pdf_path> [options]`,
+    manualCommandText: `${shellQuote(pythonCmd)} scripts/read_pdf.py <pdf_path> [options]`,
     wrapperBody: [
       'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
       `exec ${shellQuote(pythonCmd)} "$SCRIPT_DIR/read_pdf.py" "$@"`
@@ -306,9 +285,9 @@ async function configureConda(rl) {
     type: 'conda',
     name: `conda (${envName})`,
     check: { cmd: condaCmd, args: ['--version'] },
-    detect: buildBashTask(buildCondaShellScript(condaBase, envName, ['python', '-c', 'import fitz'])),
+    detect: buildBashTask(buildCondaShellScript(condaBase, envName, ['python', '-c', 'import pymupdf'])),
     install: buildBashTask(buildCondaShellScript(condaBase, envName, ['python', '-m', 'pip', 'install', '--upgrade', 'PyMuPDF'])),
-    manualCommandText: `source ${path.join(condaBase, 'etc', 'profile.d', 'conda.sh')} && conda activate ${envName} && python scripts/read_pdf.py <pdf_path> [options]`,
+    manualCommandText: `source ${shellQuote(path.join(condaBase, 'etc', 'profile.d', 'conda.sh'))} && conda activate ${shellQuote(envName)} && python scripts/read_pdf.py <pdf_path> [options]`,
     wrapperBody: buildCondaWrapperBody(condaBase, envName)
   };
 }
@@ -333,7 +312,7 @@ async function configureUv(rl) {
       type: 'uv',
       name: 'uv (managed)',
       check: { cmd: uvCmd, args: ['--version'] },
-      detect: { cmd: uvCmd, args: ['run', '--with', 'PyMuPDF', 'python', '-c', 'import fitz'] },
+      detect: { cmd: uvCmd, args: ['run', '--with', 'PyMuPDF', 'python', '-c', 'import pymupdf'] },
       install: null,
       manualCommandText: `${uvCmd} run --with PyMuPDF python scripts/read_pdf.py <pdf_path> [options]`,
       wrapperBody: [
@@ -347,7 +326,7 @@ async function configureUv(rl) {
     type: 'uv',
     name: 'uv (current env)',
     check: { cmd: uvCmd, args: ['--version'] },
-    detect: { cmd: uvCmd, args: ['run', 'python', '-c', 'import fitz'] },
+    detect: { cmd: uvCmd, args: ['run', 'python', '-c', 'import pymupdf'] },
     install: { cmd: uvCmd, args: ['pip', 'install', '--upgrade', 'PyMuPDF'] },
     manualCommandText: `${uvCmd} run python scripts/read_pdf.py <pdf_path> [options]`,
     wrapperBody: [
@@ -369,8 +348,8 @@ async function prepareEnvironment(rl) {
   return configureUv(rl);
 }
 
-async function checkAndInstallDependency(rl, envConfig) {
-  printStep(2, 3, `Checking PyMuPDF in ${envConfig.name}`);
+async function checkAndInstallDependency(rl, envConfig, unattended = false) {
+  printStep(3, 3, `Checking PyMuPDF in ${envConfig.name}`);
 
   const detectResult = runCommand(envConfig.detect.cmd, envConfig.detect.args);
   if (detectResult.ok) {
@@ -379,6 +358,9 @@ async function checkAndInstallDependency(rl, envConfig) {
   }
 
   warn('PyMuPDF is not available in the selected runtime.');
+  if (unattended) {
+    throw new Error(`PyMuPDF check failed. Install it in the selected Python runtime before retrying.\n${detectResult.stderr}`);
+  }
   if (!envConfig.install) {
     warn('No install step is required in managed uv mode, but runtime check still failed.');
     if (detectResult.stderr) {
@@ -403,17 +385,19 @@ async function checkAndInstallDependency(rl, envConfig) {
     return false;
   }
 
-  ok('PyMuPDF installed successfully.');
+  const recheck = runCommand(envConfig.detect.cmd, envConfig.detect.args);
+  if (!recheck.ok) throw new Error(`PyMuPDF import still fails after installation.\n${recheck.stderr}`);
+  ok('PyMuPDF installed and import verified.');
   return true;
 }
 
 async function chooseTarget(rl) {
-  printStep(3, 3, 'Select installation target');
+  printStep(1, 3, 'Select installation target');
   return chooseOne(rl, 'Where should paper-workbench be installed?', [
     {
       key: 'codex',
       label: 'Codex',
-      hint: '~/.codex/skills plus ~/.codex/agents for the paper agents'
+      hint: '~/.agents/skills plus native TOML agents in ~/.codex/agents'
     },
     {
       key: 'claude',
@@ -423,45 +407,25 @@ async function chooseTarget(rl) {
   ], 0);
 }
 
-function buildInstallPlan(targetKey) {
-  const plan = [];
-  const skillBase = resolveSkillBase(targetKey);
-  for (const component of SKILL_COMPONENTS) {
-    plan.push({
-      component,
-      kind: 'skill',
-      templateDir: path.join(TEMPLATE_ROOT, component),
-      destination: path.join(skillBase, component)
-    });
-  }
-
-  const agentBase = resolveAgentBase(targetKey);
-  if (agentBase) {
-    for (const component of CODEX_AGENT_COMPONENTS) {
-      plan.push({
-        component,
-        kind: 'agent',
-        templateDir: path.join(TEMPLATE_ROOT, 'agents', component),
-        destination: path.join(agentBase, component)
-      });
-    }
-  }
-
-  return plan;
-}
-
-async function ensureOverwrite(rl, plan) {
-  const existing = plan.filter((item) => existsSync(item.destination));
+async function ensureOverwrite(rl, inspections, options) {
+  const existing = inspections.filter((item) => item.status !== 'new');
   if (!existing.length) {
     return;
   }
 
   const preview = existing
-    .map((item) => `- ${item.kind}: ${item.destination}`)
+    .map((item) => `- ${item.status}: ${item.destination}`)
     .join('\n');
+  const conflicts = existing.filter((item) => item.status !== 'managed');
+  if (options.yes) {
+    if (conflicts.length && !options.force) {
+      throw new Error(`Existing components have local changes or no trusted content manifest:\n${preview}\nInspect them first. Use --force --yes to replace with backups.`);
+    }
+    return;
+  }
   const confirmed = await confirm(
     rl,
-    `These components already exist and will be replaced:\n${preview}\nOverwrite them?`,
+    `These components already exist:\n${preview}\nReplace them and retain backups?`,
     false
   );
   if (!confirmed) {
@@ -469,13 +433,14 @@ async function ensureOverwrite(rl, plan) {
   }
 }
 
-async function finalizeReadPdfSkill(destination, envConfig) {
+async function finalizeReadPdfSkill(destination, envConfig, installedDestination = destination) {
   const templatePath = path.join(destination, 'SKILL.template.md');
   const finalSkillPath = path.join(destination, 'SKILL.md');
   const template = await fs.readFile(templatePath, 'utf8');
   const finalContent = template
-    .replaceAll('{{WRAPPER_COMMAND}}', 'bash scripts/run_read_pdf.sh <pdf_path> [options]')
-    .replaceAll('{{MANUAL_COMMAND}}', envConfig.manualCommandText);
+    .replaceAll('{{WRAPPER_COMMAND}}', `bash ${shellQuote(path.join(installedDestination, 'scripts', 'run_read_pdf.sh'))} <pdf_path> [options]`)
+    .replaceAll('{{SKILL_DIRECTORY}}', shellQuote(installedDestination))
+    .replaceAll('{{MANUAL_COMMAND}}', envConfig.manualCommandText.replace('scripts/read_pdf.py', shellQuote(path.join(installedDestination, 'scripts', 'read_pdf.py'))));
 
   await fs.writeFile(finalSkillPath, finalContent, 'utf8');
   await fs.rm(templatePath);
@@ -492,46 +457,46 @@ async function finalizeReadPdfSkill(destination, envConfig) {
   await fs.chmod(wrapperPath, 0o755);
 }
 
-async function writeMetadata(destination, payload) {
-  const metadataPath = path.join(destination, '.installer-meta.json');
-  await fs.writeFile(metadataPath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
-}
-
-async function installPlan(plan, targetKey, envConfig, dependencyReady) {
-  const installed = [];
-
-  for (const item of plan) {
-    await fs.rm(item.destination, { recursive: true, force: true });
-    await fs.mkdir(path.dirname(item.destination), { recursive: true });
-    await fs.cp(item.templateDir, item.destination, { recursive: true });
-
-    if (item.kind === 'skill' && item.component === 'read-pdf') {
-      await finalizeReadPdfSkill(item.destination, envConfig);
-    }
-
-    await writeMetadata(item.destination, {
-      installedAt: new Date().toISOString(),
-      packageName: 'paper-workbench',
-      target: targetKey,
-      component: item.component,
-      componentType: item.kind,
-      environment: envConfig.type,
-      dependencyReady
-    });
-
-    installed.push(item);
+function parseOptions(argv) {
+  const options = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (['--target', '--python', '--install-root'].includes(arg)) {
+      if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`Missing value for ${arg}`);
+      options[arg.slice(2)] = argv[++i];
+    } else if (['--yes', '--force', '--dry-run', '--help', '--version'].includes(arg)) {
+      options[arg.slice(2)] = true;
+    } else throw new Error(`Unknown option: ${arg}`);
   }
-
-  return installed;
+  if (options.target && !TARGETS[options.target]) throw new Error('Target must be codex or claude.');
+  if (options.yes && (!options.target || !options.python)) throw new Error('--yes requires --target and --python.');
+  if (options.force && !options.yes) throw new Error('--force requires --yes. Interactive installs ask before overwriting.');
+  return options;
 }
 
 async function main() {
+  const options = parseOptions(process.argv.slice(2));
+  if (options.help) {
+    console.log('paper-workbench [--target codex|claude] [--python /path/to/python] [--yes [--force]] [--dry-run]\n\n--dry-run       Inspect destinations and local changes without writing or checking dependencies.\n--yes           Install using the supplied Python; refuse unmanaged or modified components.\n--force         Allow those replacements with retained backups. No dependency installation in --yes mode.\n--install-root  Use a separate home-style layout, for staging or isolated validation.\n--version       Print the package version.');
+    return;
+  }
+  if (options.version) { console.log(PACKAGE.version); return; }
   printBanner();
+  if (!input.isTTY && !options.target) throw new Error('Specify --target codex or --target claude in non-interactive mode.');
 
   const rl = createInterface({ input, output });
   try {
-    printStep(1, 3, 'Select Python environment');
-    const envConfig = await prepareEnvironment(rl);
+    const target = options.target ? { key: options.target } : await chooseTarget(rl);
+    const installRoot = options['install-root'] ? path.resolve(expandHome(options['install-root'])) : os.homedir();
+    const plan = buildInstallPlan(target.key, { root: installRoot });
+    const inspections = await inspectInstallPlan(plan);
+    for (const item of inspections) info(`${item.status}: ${item.kind} ${item.destination}`);
+    for (const legacy of await findLegacyEntries(target.key, installRoot)) warn(`Legacy entry preserved: ${legacy}`);
+    if (options['dry-run']) return;
+    if (!input.isTTY && !options.yes) throw new Error('Non-interactive installation requires --target, --python, and --yes.');
+    await ensureOverwrite(rl, inspections, options);
+    printStep(2, 3, 'Select Python environment');
+    const envConfig = options.python ? await configureNative(rl, options.python) : await prepareEnvironment(rl);
 
     const checkResult = runCommand(envConfig.check.cmd, envConfig.check.args);
     if (!checkResult.ok) {
@@ -539,14 +504,17 @@ async function main() {
     }
 
     ok(`Runtime selected: ${envConfig.name}`);
-    info(`Installed read-pdf wrapper will expose:\n  bash scripts/run_read_pdf.sh <pdf_path> [options]`);
+    info(`Installed read-pdf wrapper:\n  bash ${shellQuote(path.join(plan[0].destination, 'scripts/run_read_pdf.sh'))} <pdf_path> [options]`);
     info(`Manual fallback command:\n  ${envConfig.manualCommandText}`);
 
-    const dependencyReady = await checkAndInstallDependency(rl, envConfig);
-    const target = await chooseTarget(rl);
-    const plan = buildInstallPlan(target.key);
-    await ensureOverwrite(rl, plan);
-    const installed = await installPlan(plan, target.key, envConfig, dependencyReady);
+    const dependencyReady = await checkAndInstallDependency(rl, envConfig, options.yes);
+    if (!dependencyReady) throw new Error('Installation stopped because PyMuPDF is not ready. Existing components were preserved.');
+    const { installed, backups } = await installComponents(inspections, {
+      version: PACKAGE.version, target: target.key, environment: envConfig.type, dependencyReady,
+      finalizeSkill: async (component, staged) => {
+        if (component === 'read-pdf') await finalizeReadPdfSkill(staged, envConfig, plan.find((item) => item.component === component).destination);
+      }
+    });
 
     console.log('\n' + c('-'.repeat(64), ANSI.cyan));
     ok('Installation completed.');
@@ -554,11 +522,9 @@ async function main() {
     for (const item of installed) {
       info(`Installed ${item.kind}: ${item.destination}`);
     }
+    for (const item of backups) info(`Backup: ${item.backup}`);
     if (target.key === 'claude') {
       warn('Claude Code installs the skill pack only. Codex-specific agents were skipped.');
-    }
-    if (!dependencyReady) {
-      warn('PyMuPDF is not ready yet. Install it before using read-pdf.');
     }
     console.log(c('-'.repeat(64), ANSI.cyan));
   } finally {

@@ -7,7 +7,7 @@ Use this reference when the user gives an existing review and asks for feedback 
 Improve the **quality of the review**, not the paper.
 Address the reviewer directly and help them make comments more specific and actionable.
 
-## What to Check
+## What to check
 
 ### 1. Requests already answered by the paper
 
@@ -28,17 +28,17 @@ Treat these as failure modes:
 
 - praise-only feedback
 - feedback addressed to the authors instead of the reviewer
-- merely restating the reviewer's point without improving it
+- merely restating the reviewer’s point without improving it
 - feedback about comments that are not actually in the review
 
-## Good Feedback Style
+## Good feedback style
 
 - concise
 - specific
-- addressed to "you"
-- improves the reviewer's wording or asks for sharper evidence
+- addressed to “you”
+- improves the reviewer’s wording or asks for sharper evidence
 
-## Bad Feedback Style
+## Bad feedback style
 
 - generic praise
 - long preambles

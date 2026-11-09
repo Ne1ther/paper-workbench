@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
+from importlib.metadata import version
 import json
 import os
 import re
@@ -16,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf as fitz
 
 
 FIGURE_CAPTION_PATTERN = re.compile(
@@ -28,6 +30,8 @@ KEEP_TEMP_OUTPUT_PREFIX = "codex-read-pdf-keep-"
 LEGACY_TEMP_OUTPUT_PREFIX = "codex-read-pdf-"
 TEMP_RETENTION_SECONDS = 24 * 60 * 60
 TEMP_MAX_BYTES = 512 * 1024 * 1024
+PYMUPDF_VERSION = version("PyMuPDF")
+CACHE_SCHEMA = 2
 
 
 def parse_page_ranges(spec: str, page_count: int) -> list[int]:
@@ -42,11 +46,18 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
             end = int(end_str)
             if start > end:
                 start, end = end, start
+            if start < 1 or end > page_count:
+                raise ValueError(f"Page range must be within 1-{page_count}: {token}")
             pages.update(range(start, end + 1))
         else:
-            pages.add(int(token))
+            page = int(token)
+            if not 1 <= page <= page_count:
+                raise ValueError(f"Page must be within 1-{page_count}: {token}")
+            pages.add(page)
 
-    return [page for page in sorted(pages) if 1 <= page <= page_count]
+    if not pages:
+        raise ValueError("Select at least one page.")
+    return sorted(pages)
 
 
 def clip_text(text: str, max_chars: int) -> str:
@@ -149,10 +160,21 @@ def enforce_temp_size_cap(temp_root: Path) -> None:
             continue
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def build_cache_key(pdf_path: Path, mode: str, extra: dict[str, object] | None = None) -> str:
     stat = pdf_path.stat()
     payload = {
+        "cache_schema": CACHE_SCHEMA,
+        "pymupdf_version": PYMUPDF_VERSION,
         "pdf_path": str(pdf_path),
+        "pdf_sha256": file_sha256(pdf_path),
         "mtime_ns": stat.st_mtime_ns,
         "size": stat.st_size,
         "mode": mode,
@@ -167,13 +189,14 @@ def build_named_temp_root(cache_key: str, keep_temp: bool) -> Path:
     return Path(tempfile.gettempdir()) / f"{prefix}{cache_key}"
 
 
-def existing_temp_roots(cache_key: str) -> list[Path]:
+def existing_temp_roots(cache_key: str, keep_temp: bool = False) -> list[Path]:
     temp_root = Path(tempfile.gettempdir())
-    candidates = [
-        temp_root / f"{KEEP_TEMP_OUTPUT_PREFIX}{cache_key}",
-        temp_root / f"{TEMP_OUTPUT_PREFIX}{cache_key}",
-        temp_root / f"{LEGACY_TEMP_OUTPUT_PREFIX}{cache_key}",
-    ]
+    candidates = [temp_root / f"{KEEP_TEMP_OUTPUT_PREFIX}{cache_key}"]
+    if not keep_temp:
+        candidates += [
+            temp_root / f"{TEMP_OUTPUT_PREFIX}{cache_key}",
+            temp_root / f"{LEGACY_TEMP_OUTPUT_PREFIX}{cache_key}",
+        ]
     seen: set[Path] = set()
     result: list[Path] = []
     for path in candidates:
@@ -193,8 +216,64 @@ def touch_path(path: Path) -> None:
         pass
 
 
+@contextmanager
+def atomic_text_file(path: Path):
+    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    staged = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            yield handle
+        staged.replace(path)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with atomic_text_file(path) as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+
+
+def valid_text_cache(path: Path, cache_key: str, page_count: int) -> bool:
+    try:
+        manifest = json.loads(path.with_suffix(".manifest.json").read_text(encoding="utf-8"))
+        records = path.with_suffix(".pages.jsonl")
+        return (
+            manifest["kind"] == "read-pdf-full-text-cache"
+            and manifest["cache_schema"] == CACHE_SCHEMA
+            and manifest["cache_key"] == cache_key
+            and manifest["page_count"] == manifest["pages_written"] == page_count
+            and manifest["mode_counts"].get("text-fallback", 0) == 0
+            and manifest["sha256"]["full_text"] == file_sha256(path)
+            and manifest["sha256"]["pages_jsonl"] == file_sha256(records)
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def valid_render_cache(path: Path, cache_key: str, page: int) -> bool:
+    try:
+        manifest = json.loads(path.with_suffix(".manifest.json").read_text(encoding="utf-8"))
+        return (
+            manifest["kind"] == "read-pdf-render-cache"
+            and manifest["cache_schema"] == CACHE_SCHEMA
+            and manifest["cache_key"] == cache_key
+            and manifest["page"] == page
+            and manifest["sha256"] == file_sha256(path)
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def save_png_atomic(pixmap: fitz.Pixmap, path: Path) -> None:
+    descriptor, name = tempfile.mkstemp(prefix=f".{path.stem}.", suffix=".png", dir=path.parent)
+    os.close(descriptor)
+    staged = Path(name)
+    try:
+        pixmap.save(staged)
+        staged.replace(path)
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 def slim_pdf_metadata(doc: fitz.Document) -> dict[str, str]:
@@ -401,9 +480,9 @@ def dump_all_text(reader: PDFReader, pdf_path: Path, output: Path | None) -> Non
             },
         )
         out_path = None
-        for root in existing_temp_roots(cache_key):
+        for root in existing_temp_roots(cache_key, reader.args.keep_temp):
             candidate = root / f"{pdf_path.stem}.txt"
-            if candidate.exists():
+            if valid_text_cache(candidate, cache_key, reader.doc.page_count):
                 touch_path(root)
                 touch_path(candidate)
                 print(f"Using cached full text: {candidate}")
@@ -415,10 +494,12 @@ def dump_all_text(reader: PDFReader, pdf_path: Path, output: Path | None) -> Non
     out_path.parent.mkdir(parents=True, exist_ok=True)
     page_records_path = out_path.with_suffix(".pages.jsonl")
     manifest_path = out_path.with_suffix(".manifest.json")
+    if any(destination.resolve() == pdf_path for destination in (out_path, page_records_path, manifest_path)):
+        raise ValueError("The export destination must not overwrite the source PDF.")
     pages_written = 0
     mode_counts: dict[str, int] = {}
-    with out_path.open("w", encoding="utf-8") as handle:
-        with page_records_path.open("w", encoding="utf-8") as page_handle:
+    with atomic_text_file(out_path) as handle:
+        with atomic_text_file(page_records_path) as page_handle:
             for page_number in range(1, reader.doc.page_count + 1):
                 text, mode, analysis = reader.extract_page_text(page_number)
                 pages_written += 1
@@ -437,6 +518,8 @@ def dump_all_text(reader: PDFReader, pdf_path: Path, output: Path | None) -> Non
                 handle.write("\n\n")
     manifest = {
         "kind": "read-pdf-full-text-cache",
+        "cache_schema": CACHE_SCHEMA,
+        "pymupdf_version": PYMUPDF_VERSION,
         "cache_key": cache_key,
         "pdf_path": str(pdf_path),
         "pdf_metadata": slim_pdf_metadata(reader.doc),
@@ -450,6 +533,7 @@ def dump_all_text(reader: PDFReader, pdf_path: Path, output: Path | None) -> Non
             "pages_jsonl": str(page_records_path),
         },
         "pages_written": pages_written,
+        "sha256": {"full_text": file_sha256(out_path), "pages_jsonl": file_sha256(page_records_path)},
         "optimized_for": "machine-readable page-scoped reuse",
     }
     write_json(manifest_path, manifest)
@@ -489,13 +573,13 @@ def render_pages(
                 "render_dpi": render_dpi,
             },
         )
-        existing_roots = existing_temp_roots(cache_key)
+        existing_roots = existing_temp_roots(cache_key, keep_temp)
         expected_names = {
             page_number: f"{pdf_path.stem}.page-{page_number}.png" for page_number in pages
         }
         for root in existing_roots:
             render_dir = root / "renders"
-            if all((render_dir / name).exists() for name in expected_names.values()):
+            if all(valid_render_cache(render_dir / name, cache_key, page) for page, name in expected_names.items()):
                 touch_path(root)
                 touch_path(render_dir)
                 for page_number in pages:
@@ -518,11 +602,17 @@ def render_pages(
     for page_number in pages:
         page = doc[page_number - 1]
         target = targets[page_number]
-        if target.exists():
+        if output is None and valid_render_cache(target, cache_key, page_number):
             print(f"Using cached render: {target}")
             continue
         pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
-        pixmap.save(target)
+        save_png_atomic(pixmap, target)
+        if output is None:
+            write_json(target.with_suffix(".manifest.json"), {
+                "kind": "read-pdf-render-cache", "cache_schema": CACHE_SCHEMA,
+                "cache_key": cache_key, "pymupdf_version": PYMUPDF_VERSION,
+                "page": page_number, "render_dpi": render_dpi, "sha256": file_sha256(target),
+            })
         print(f"Wrote render to: {target}")
 
 
@@ -578,7 +668,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ocr-min-chars",
         type=int,
-        default=80,
+        default=40,
         help="In auto mode, OCR pages with fewer than this many text chars",
     )
     parser.add_argument(
@@ -586,12 +676,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional Tesseract tessdata directory; defaults to PyMuPDF/TESSDATA_PREFIX discovery",
     )
-    parser.add_argument("--render-dpi", type=int, default=220, help="Rendering DPI for PNG output")
+    parser.add_argument("--render-dpi", type=int, default=200, help="Rendering DPI for PNG output")
     return parser
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.ocr_dpi <= 0 or args.render_dpi <= 0:
+        parser.error("DPI must be positive.")
     if not args.no_prune:
         cleanup_stale_temp_outputs()
     pdf_path = Path(args.pdf_path).expanduser().resolve()
@@ -603,6 +696,9 @@ def main() -> None:
 
     doc = fitz.open(pdf_path)
     try:
+        for page in (args.page, args.render_page):
+            if page is not None and not 1 <= page <= doc.page_count:
+                raise ValueError(f"Page must be within 1-{doc.page_count}: {page}")
         reader = PDFReader(doc, args)
         if args.render_page is not None:
             render_pages(doc, pdf_path, [args.render_page], args.output, args.render_dpi, args.keep_temp)
@@ -629,6 +725,8 @@ def main() -> None:
             dump_all_text(reader, pdf_path, args.output)
         else:
             show_default_preview(reader, pdf_path, args.max_chars)
+    except ValueError as exc:
+        parser.error(str(exc))
     finally:
         doc.close()
 

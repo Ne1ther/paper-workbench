@@ -1,244 +1,83 @@
 ---
 name: paper-analyst
-description: Rigorous research-paper analysis from PDFs or paper manuscripts once the source artifact is loaded, with evidence-backed summaries, method reconstruction, experiment audits, reproducibility checks, comparison support, and follow-up recommendations. Use when users ask to deeply read, critique, compare, or decide whether to reproduce a specific academic paper or PDF, especially when page-cited judgments are required or the paper includes scanned pages, tables, figures, or arXiv source context. Do not turn on literature search unless the user explicitly asks for related work, novelty checks, baselines, or recent papers.
+description: Analyze a specific research paper using the actual PDF, article HTML, or source manuscript. Use for summaries, method reconstruction, critical analysis, experiment audits, paper comparisons, and reproduction decisions with traceable evidence. Add literature search only when the user explicitly requests related work, novelty verification, baselines, or field positioning; route formal reviews and rebuttals to paper-review.
 ---
 
 # Paper Analyst
 
-Use this skill after loading the source document. For PDFs, pair it with `read-pdf` and deliberately choose between plain extraction, OCR, rendered-page inspection, or a hybrid of these modes.
-For full paper-analysis tasks from a PDF, prefer letting `paper-analyst-agent` orchestrate this skill together with `read-pdf` when that reusable agent profile is available.
-Only pair this skill with `paper-search` when the user explicitly asks for related work, novelty, field positioning, baselines, or recent-paper scouting.
-When official Zotero and LaTeX plugins are installed, treat them as neighboring workflow tools: Zotero handles library search, citation keys, BibTeX export/sync, and explicit imports; LaTeX handles TeX compilation and diagnostics. This skill handles evidence-backed interpretation.
+Match the depth to the user's question and keep conclusions tied to the version actually read. `read-pdf` handles PDF ingestion; this skill handles interpretation. The optional `paper-analyst-agent` profile orchestrates these skills without duplicating their rules.
 
-## Routing Snapshot
+## Choose The Mode
 
-- **Quick attached-PDF orientation or a tiny quote lookup from already-visible PDF context** -> native PDF reading is fine.
-- **Raw PDF reading, page lookup, figure/table inspection, OCR, or export** -> use `read-pdf` first.
-- **Deep understanding, critique, reproduction decision, or comparison** -> use `paper-analyst`.
-- **Reviewer-style judgment, meta-review, rebuttal, or AC decision** -> switch to `paper-review`.
-- **Related work, novelty boundary, baseline hunting, or recent-paper scan** -> add `paper-search`, but only when the user explicitly asks.
-- **Existing Zotero item or durable citation work** -> use the official Zotero plugin before or after analysis as needed.
-- **Editing or compiling a TeX manuscript** -> use the official LaTeX plugin for compilation and diagnostics.
+- `summary`: problem, main idea, key result, and its scope; a short answer can be complete.
+- `critique`: method assumptions, evidence quality, strengths, and consequential weaknesses. This is the default for an unspecified deep analysis.
+- `reproduction-decision`: assess feasibility and expected value, then recommend `go`, `no-go`, or `needs-more-evidence`.
+- `comparison`: map each paper independently before comparing compatible claims and settings.
+- `related-work-gap`: only when explicitly requested; use `paper-search` to obtain close neighbors before judging differentiation.
 
-## Trigger Boundary
+A summary does not require numerical scores, a reproduction verdict, or a full experiment audit. Formal reviewer reports, meta-reviews, and rebuttals belong to `paper-review`.
 
-Turn this skill on for prompts like:
+## Acquire And Identify The Source
 
-- "Read this paper deeply"
-- "Critically analyze this paper"
-- "Is this worth reproducing"
-- "Compare these two papers"
+1. Use a supplied local PDF/manuscript directly. Record title, version, venue/year, and stable DOI/arXiv link when available.
+2. For title/DOI/Zotero-key input, inspect available Zotero tools if the paper may be in the library. Use `read-pdf`'s read-only resolver when only a local attachment path is needed. Do not assume a Zotero plugin is installed.
+3. Otherwise use legal OA/arXiv/author full text or readable article HTML. Temporary reading does not require a Zotero import. Suggest saving only references likely to be reused, within the user's library-management scope.
+4. If only an abstract or partial pages are available, provide a limited summary and identify what is not assessed. Seek the real full text before making detailed experimental or reproducibility judgments.
+5. If login/manual access is needed and the paper matters, label it `needs_user_pdf`. Try legal alternatives first and use only the user's normal authorized access.
 
-Do **not** auto-enable `paper-search` just because the analysis mentions novelty or related work in passing.
-Only do that when the user explicitly asks to search, find, scout, survey, or fill in the literature landscape.
-If the user wants a conference-style reviewer report, meta-review, AC decision, rebuttal workflow, or multi-agent review, switch to `paper-review` / `paper-review-agent` instead of stretching this skill into that role.
+Access labels, after checking: `zotero_pdf`, `oa_pdf`, `html_fulltext`, `abstract_only`, `metadata_only`, `needs_user_pdf`. A link returned by search is only a candidate until inspected.
 
-## Supported Tasks
+## Read Selectively
 
-- Deep summary with page evidence
-- Critical review or experiment audit
-- Reproduction decision (`go` / `no-go`)
-- Paper comparison
-- Method breakdown from a PDF with figure/table support
+- Use already-visible PDF content for a simple question if it is sufficient.
+- For controlled PDF reading, follow `read-pdf` and start with `--toc`, `--search`, `--page`, or `--pages` around the relevant claims.
+- Use native text first, OCR for missing/scanned text, and rendered pages for figure/table-dependent judgments. Cross-check rows, columns, axes, units, and captions directly.
+- Reuse matching cached extraction/renders. Keep generated artifacts in system temp and clean task-created files after use unless retention was requested.
+- Read `references/arxiv-source-first.md` only when source files would clarify equations, tables, appendices, or implementation detail. Source text supplements the paper; it does not prove an experiment ran.
 
-## Run Workflow
+## Build An Evidence Map
 
-### 1. Scope the task first
+Before judging, identify the research question, assumptions, method path (`input -> modules -> output`), central claims, and the experiments that support them. Use a compact internal ledger; expose a table only when it helps the answer.
 
-Classify the request before reading deeply.
+Each major judgment needs an actual locator:
 
-- `summary`: concise understanding of problem, method, and result
-- `critique`: strengths, weaknesses, fairness, and evidence quality
-- `reproduction-decision`: whether the paper is worth reproducing or following up
-- `comparison`: compare multiple papers after separate per-paper analysis
-- `related-work-gap`: locate close neighbors first, then judge how differentiated the paper really is
+- PDF: paper/version plus page and, where useful, figure/table/equation number. Distinguish PDF page index from printed page labels when they differ.
+- Article HTML: section heading and stable anchor or a clearly identified paragraph/figure.
+- LaTeX/source: file and line/section; do not invent PDF page numbers.
 
-Default to `critique` when the user says "analyze this paper" without more guidance.
+Separate direct text/visual evidence from your inference. Preserve conflicts between a caption, plot, table, and prose instead of smoothing them over.
 
-### 2. Acquire the right artifact
+Distinguish three states: **not accessed**, **not reported in the inspected material**, and **a demonstrated weakness**. Limited access lowers assessment confidence; it is not itself evidence of a bad paper.
 
-Do not start deep analysis from a vague citation alone.
+## Audit When The Mode Requires It
 
-- If the user provided a local PDF, use that artifact directly.
-- If the user provided a Zotero item key, BibTeX key, DOI, or title that may already be in Zotero, use the official Zotero plugin first to search the local library. If a local PDF attachment exists, read it through `read-pdf`.
-- If the user provided an arXiv link and analysis depends on implementation detail, method reconstruction, or appendix-heavy evidence, read `references/arxiv-source-first.md` and consider source-first inspection after the PDF pass.
-- If the paper has legal OA or arXiv full text, read it as a temporary artifact unless the user asks to save it.
-- If publisher HTML contains the full text, read the HTML directly when possible and use the PDF only for page-specific evidence, figures, or tables.
-- If full text requires login or manual download, label the source as `needs_user_pdf` and ask the user to provide the PDF or save it through Zotero Connector.
-- If the user provided only a title, abstract snippet, or screenshot, first obtain the real paper artifact before giving high-confidence judgments.
+For critique or reproduction work, inspect the dimensions relevant to the central claim:
 
-Access labels:
+- problem definition, assumptions, and scope
+- method coherence and derivation/algorithm details
+- dataset/task fit, train/validation/test roles, and potential leakage
+- metric choice and baseline comparison conditions
+- ablation support, variance/uncertainty reporting, and failure cases
+- code, data, hyperparameters, compute, and other reproduction dependencies
 
-- `zotero_pdf`: local Zotero attachment available
-- `oa_pdf`: legal open-access PDF available
-- `html_fulltext`: enough full text is readable as HTML
-- `abstract_only`: metadata or abstract only
-- `needs_user_pdf`: user-side PDF acquisition is required
+Use `strong`, `medium`, or `weak` support only with a reason and locator. Do not treat unavailable code, an unread appendix, or absent statistical reporting as the same issue. When comparing studies, explain incompatible settings before comparing headline numbers.
 
-Do not import every process-stage paper into Zotero. Keep temporary reads in system temp/cache, and promote only durable references that the user needs for precise citation, later reuse, or manuscript bibliography.
+For a reproduction decision, explain the main benefit, the concrete blocker or uncertainty, and the next step that would resolve it. Do not force `go`/`no-go` when the decisive artifact is unavailable. Estimate effort only when the task and resource assumptions are stated.
 
-### 3. Choose the PDF ingestion mode via `read-pdf`
+## Output By Mode
 
-Do not read every page the same way.
+Lead with the answer, then include the evidence needed to assess it.
 
-- If Codex already has enough visible PDF context for quick orientation, use that first before escalating.
-- Prefer scoped `read-pdf` calls first (`--toc`, `--page`, `--pages`, `--search`) instead of dumping the whole document by default.
-- Start with native text extraction for abstract, intro, conclusion, and likely method / experiment pages.
-- If the PDF is scanned or extracted text is obviously incomplete, use OCR via `read-pdf`.
-- If the user asks about figures, charts, architecture diagrams, tables, or layout-sensitive evidence, render the relevant pages to PNG and inspect those images directly.
-- For dense result tables or image-heavy pages, use a hybrid workflow: rendered-page inspection plus text extraction or OCR on the same pages.
-- Reuse any matching `read-pdf` cached export or render before regenerating it.
-- If the paper is on arXiv and the user wants a method teardown, table extraction, or pipeline reconstruction, read `references/arxiv-source-first.md` and consider source-first inspection before relying only on the PDF.
+- Summary: problem, method, key result, scope, and source locators. No mandatory scorecard.
+- Critique: concise takeaway, method reconstruction, strongest supported findings, consequential limitations, and evidence gaps. Expand only as needed.
+- Reproduction decision: recommendation, feasibility/artifact assessment, and a few prioritized next steps.
+- Comparison: a compact per-paper evidence map and a table of the relevant differences; attach each locator to the correct paper.
+- Related-work gap: inspected neighbor set, concrete overlap/differences, and uncertainty from search/access coverage.
 
-Preferred heuristics:
+Use `references/scoring-rubric.md` only when the user asks for scores or supplies a rubric. A numerical novelty score needs an inspected comparison set; otherwise mark it `not assessed`.
 
-- native-text paper: text extraction first
-- scanned paper: `read-pdf` with OCR
-- figure/table question: render pages first, then cross-check with text or OCR
-- full-document extraction on likely scans: OCR-enabled full export
+## Adjacent Workflows
 
-### 4. Build the paper map before judging
+Add `paper-search` only for explicit literature discovery, novelty verification, missing references, baselines, or field positioning, and only when installed. Otherwise use available live search with an explicit coverage record or report the missing capability. A passing mention of novelty in one paper does not trigger a search.
 
-Create a compact map of the paper:
-
-- title, authors, venue, year
-- research question / task definition
-- method path as `input -> modules -> output`
-- claimed contribution(s)
-- what evidence would be needed to support those claims
-
-### 5. Maintain an evidence ledger
-
-Every major judgment must be evidence-backed.
-
-Use these evidence labels when helpful:
-
-- `text evidence (p.X)`
-- `figure/table evidence (p.X)`
-- `inference from evidence (p.X-p.Y)`
-
-Rules:
-
-- Never cite a claim without page evidence unless it is explicitly your inference.
-- If evidence is partial, say so.
-- If the figure/table seems to say something slightly different from the text, surface the mismatch.
-- If a conclusion depends mainly on a figure caption or rendered page impression, say that explicitly instead of treating it like clean body-text evidence.
-- If you keep any rendered page or exported text file for follow-up, mention the absolute path explicitly.
-
-### 6. Audit the paper systematically
-
-Check the following dimensions explicitly:
-
-- problem framing and scope
-- method coherence and assumptions
-- dataset / task fit
-- metric fit
-- baseline fairness
-- ablation sufficiency
-- statistical reporting, variance, or significance information
-- limitations, failure cases, and boundary conditions
-- reproducibility artifacts: code, data, hyperparameters, training details, compute
-
-For each major claim, judge support strength as:
-
-- `strong`
-- `medium`
-- `weak`
-
-### 7. Turn the audit into a recommendation
-
-Decide whether follow-up should be `go` or `no-go`.
-
-- `go`: the paper is promising enough to reproduce, adapt, or study further
-- `no-go`: evidence quality, practicality, or reproducibility risk is too weak
-
-If `go`, give 3 concrete next steps.
-If `no-go`, state the main blocker(s).
-
-### 8. Optional related-work gap check
-
-Use this only when the user explicitly asks:
-
-- whether the idea is novel
-- what papers are closest in the field
-- what baselines should be compared
-- whether the draft is missing important related work
-
-Workflow:
-
-- use `paper-search` to gather close neighbors and strong baselines
-- compare the target paper's real differentiators against those neighbors
-- call out overlaps, likely novelty boundaries, and missing citations
-
-### 9. Optional Zotero and LaTeX handoff
-
-Use these only when the user's task touches citation management or manuscript production:
-
-- Search Zotero before adding a new reference, so duplicates are not created.
-- Export or sync `references.bib` through the official Zotero plugin.
-- Insert citation keys through the official Zotero plugin when editing `.tex` or Markdown drafts.
-- Compile `.tex` projects through the official LaTeX plugin, not through paper-workbench.
-- If LaTeX compilation fails, keep the failure separate from paper analysis: cite the exact compiler/log issue and route to `latex-doctor` when needed.
-
-## Output Contract
-
-Always output two layers unless the user explicitly requests otherwise.
-
-### Layer A: Quick View (<=200 words)
-
-- Research question
-- Main takeaway
-- Follow-up decision: `go` or `no-go`
-
-### Layer B: Detailed Analysis
-
-1) Paper metadata
-2) Core contributions (3-5 bullets, each with page evidence)
-3) Method reconstruction and baseline differences
-4) Experiment audit and support-strength judgment
-5) Limitations, risks, and failure modes
-6) Reproducibility checklist (provided vs missing)
-7) Quantitative scores (1-10) with evidence for each:
-   - novelty
-   - technical soundness
-   - experimental credibility
-   - reproducibility
-   - practical value
-8) Final recommendation and next steps
-
-When helpful, add a compact **Evidence Gaps** subsection listing the 2-4 biggest missing pieces that block stronger confidence.
-
-## Comparison Mode
-
-If multiple papers are provided:
-
-- build one evidence-backed map per paper first
-- keep page citations attached to the correct paper
-- only then produce cross-paper comparison
-
-Recommended comparison axes:
-
-- problem framing
-- method differences
-- evidence quality
-- reproducibility readiness
-- practical follow-up value
-
-## Operating Rules
-
-- Never fabricate missing details.
-- State `uncertain` when evidence is insufficient.
-- Prefer direct evidence over subjective interpretation.
-- Keep concise writing, but never omit evidence for key judgments.
-- Do not let a polished abstract or intro substitute for experimental evidence.
-- Use rendered-page inspection whenever a key conclusion depends on a figure, table, chart, or layout.
-- Prefer OCR only when it adds evidence; do not slow every workflow down by default.
-- When invoking `read-pdf`, use its wrapper or an activated in-shell runtime instead of `conda run -n`.
-- When a local Zotero PDF is available, read the resolved PDF path with `read-pdf`; do not duplicate that PDF into another cache unless a temp export/render is needed.
-- When a publisher PDF cannot be fetched because of permissions, do not try to bypass access controls. Try legal OA, arXiv, author manuscripts, or existing Zotero attachments, then ask for user-provided PDF if needed.
-- When the user explicitly asks for field positioning or novelty checks, use `paper-search` first rather than inferring the literature from one paper alone.
-
-## Optional Reference
-
-Read `references/scoring-rubric.md` when a deeper scoring standard is needed.
-Read `references/arxiv-source-first.md` when an arXiv paper needs source-first teardown.
+Use installed Zotero tools for requested citation/library operations and installed LaTeX skills for requested compilation. Discover actual capabilities before calling them; report missing tools plainly and use available read-only alternatives. Keep compiler errors separate from research judgments. Manuscript edits require manuscript-editing scope, and reviewer-response evidence should be assembled before the user's requested consolidation stage.
